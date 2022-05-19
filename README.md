@@ -17,37 +17,46 @@ letters or numbers, then followed by @ char and a domain (or domain + subdomain)
 ### Abstraction for general validation:
 
 occurrencies that not start with letters:
+
 ```select email FROM emails WHERE email NOT REGEXP '^[a-z]';```
 
 occurrencies without any @:
+
 ```select email FROM emails WHERE email NOT REGEXP '.*@.*';"```
 
 occurrencies with double @:
+
 ```select email FROM emails WHERE email REGEXP '.*@.*@';```
 
 occurrencies with two punctuations at sequence:
+
 ```select email FROM emails WHERE email REGEXP '.*[[:punct:]]{2,}.*';```
 
 punctuation before \@ char:
+
 ```select email FROM emails WHERE email REGEXP '[[:punct:]]@';```
 
 invalid characters:
+
 ```select email FROM emails WHERE email NOT REGEXP '[a-z0-9\._-_@]+';```
 
 at domain, optional subdomain and TLD:
+
 ```select email FROM emails WHERE email NOT REGEXP '@[a-z0-9]+\.[a-z]+(\.[a-z]+)?';```
 
 Regex for general validation:
+
 ``` ^[a-z]+((([0-9]+)?(([\.\_\-]+)?[a-z0-9]+)+)+)?@[a-z0-9]+\.[a-z]+(\.[a-z]+)? ```
 
 ## Usage:
 
-smdc-mysql --action dbparams
+``` smdc-mysql --action dbparams ```
 
 Arguments:
-  --select     \t SELECT emails and log results.
-  --delete     \t DELETE emails and log results.
-  --help       \t Always useful.
+
+    --select     \t SELECT emails and log results.
+    --delete     \t DELETE emails and log results.
+    --help       \t Always useful.
 
     duplicates \t Select or delete duplicated emails and log results.
     invalid    \t Select or delete invalid emails and log results.

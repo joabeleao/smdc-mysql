@@ -89,11 +89,12 @@ Arguments:
     db address.
     mail database name.
     mail table name.
+    mail field name
 
 Examples:
 
-    smdc-mysql --select duplicates john password 192.168.0.1 maildb mails\n
-    smdc-mysql --delete invalid john password 192.168.0.1 maildb mails\n"
+    smdc-mysql --select duplicates john password 192.168.0.1 maildb mails email\n
+    smdc-mysql --delete invalid john password 192.168.0.1 maildb mails email\n"
 
 
 ## Caveats

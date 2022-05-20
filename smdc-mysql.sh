@@ -33,11 +33,12 @@ Arguments:
     db address.
     mail database name.
     mail table name.
+    mail field name
 
 Examples:
 
-    $0 --select duplicates john password 192.168.0.1 maildb mails\n
-    $0 --delete invalid john password 192.168.0.1 maildb mails\n"
+    $0 --select duplicates john password 192.168.0.1 maildb mails mail\n
+    $0 --delete invalid john password 192.168.0.1 maildb mails mail\n"
 
 }
 
@@ -66,7 +67,7 @@ c1.doc = c2.doc;"
     i=0
     # iterate, execute and log.
     for query in "${DQUERY[@]}"; do
-    	"${MYSQL}" -u"${mysql_user}" -p"${mysql_pass}" -h"${mysql_host}" -d"${mysql_db}" -e "${query}" >> /var/log/smdc_duplicate${i}.log
+    	"${MYSQL}" -u"${mysql_user}" -p"${mysql_pass}" -h"${mysql_host}" -D"${mysql_db}" -e "${query}" >> /var/log/smdc_duplicate${i}.log
     	((i++))
     done
 
@@ -90,15 +91,15 @@ function _clean_invalid() {
     # set * char for deletion
 
     # queries
-    QUERY[0]="${action} * FROM ${mysql_table} WHERE ${mysql_field} NOT REGEXP '.*@.*';" # occurrencies without @ char;
-    QUERY[1]="${action} * FROM ${mysql_table} WHERE ${mysql_field} REGEXP '.*@.*@';" # occurrencies containing two @ char;
-    QUERY[3]="${action} * FROM ${mysql_table} WHERE ${mysql_field} REGEXP '.*[[:punct:]]{2,}.*';" # occurrencies containing two punctuation chars at sequence;
-    QUERY[4]="${action} * FROM ${mysql_table} WHERE ${mysql_field} NOT REGEXP '^[a-z]+((([0-9]+)?(([\.\_\-]+)?[a-z0-9]+)+)+)?@[a-z0-9]+\.[a-z]+(\.[a-z]+)?'" # general validation;
+    QUERY[0]="${action} FROM ${mysql_table} WHERE ${mysql_field} NOT REGEXP '@';" # occurrencies without @ char;
+    QUERY[1]="${action} FROM ${mysql_table} WHERE ${mysql_field} REGEXP '@.+@';" # occurrencies containing two @ char;
+    QUERY[3]="${action} FROM ${mysql_table} WHERE ${mysql_field} REGEXP '\\.\\.';" # occurrencies containing two punctuation chars at sequence;
+    QUERY[4]="${action} FROM ${mysql_table} WHERE ${mysql_field} NOT REGEXP '^[a-z0-9]+((([\.\_\-]+)?[a-z0-9]+)+)?@[a-z0-9-]+((\.[a-z0-9-]+)+)?\.[a-z]+$'" # general validation;
     
     i=0
     # iterate, execute and log
     for query in "${QUERY[@]}"; do
-    	"${MYSQL}" -u"${mysql_user}" -p"${mysql_pass}" -h"${mysql_host}" -d"${mysql_db}" -e "${query}" >> /var/log/smdc_invalid${i}.log
+    	"${MYSQL}" -u"${mysql_user}" -p"${mysql_pass}" -h"${mysql_host}" -D"${mysql_db}" -e "${query}" >> /var/log/smdc_invalid${i}.log
     	((i++))
     done
 
@@ -118,7 +119,7 @@ MYSQL_FIELD="${ARGUMENTS[7]}"
 ACTION=''
 
 case "${ARGUMENTS[0]}" in
-    "--select" ) ACTION='SELECT' ;;
+    "--select" ) ACTION='SELECT *' ;;
     "--delete" ) ACTION='DELETE' ;;
     "--help"      ) _help; exit  ;;
     *             ) _help; exit  ;;

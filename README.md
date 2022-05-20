@@ -20,16 +20,24 @@ According to the rfc 3639 ```https://datatracker.ietf.org/doc/html/rfc3696#page-
 >
 >      ! # $ % & ' * + - / = ?  ^ _ ` . { | } ~
 
-Despite rfc, each email provider have its own restrictions while creating 
+Despite rfc, each email provider have its own restrictions while creating a new email username (local part).
 
-- Emails must contain letters ( or letters and numbers) with or without special chars followd by /
+After testing email creation on different providers like google, microsoft, proton, terra, bol and checking its documentation, 
+the most common criteria found was:
+
+- Emails must start with only letters or numbers.
+- Emails must contain letters ( or letters and numbers) with or without special chars followd by
 letters or numbers, then followed by @ char and a domain (or domain + subdomain) plus a TLD.
 - Emails can only contain the following special charachters: - _ . (dash, underline and dot).
-- Emails can not have two special chars in sequence.
+- Emails can only have two special chars in sequence if the next one is not a dot.
 - Emais can only have one @ char.
 
 
 ### Abstraction for validation:
+
+There will be always a tradeoff to be considered since a good portion of invalid emails are caused by misspelled punctuation. Which, depending on the precision level, could be fixed instead of purged if better analyzed.
+
+Queries using regex to find:
 
 **occurrencies that not start with letters or numbers:**
 
@@ -90,7 +98,7 @@ Examples:
 
 ## Caveats
 
-Numbers and dash char are now allowed for Top level domains names, but with restriction of being a punycode.
+Numbers and dash charachters are now allowed for Top level domains names, but with restriction of being a punycode.
 
 As stated in ```https://tools.ietf.org/id/draft-liman-tld-names-01.html#rfc.section.3```:
 

@@ -8,7 +8,7 @@ This is a generalist script, take care. The most common case is dabases with id,
 
 ### Requirements for a valid email
 
-According to the rfc 3639 ```https://datatracker.ietf.org/doc/html/rfc3696#page-5```:
+According to the rfc 3696 ``https://datatracker.ietf.org/doc/html/rfc3696#page-5```:
 
 >Contemporary email addresses consist of a "local part" separated from
    a "domain part" (a fully-qualified domain name) by an at-sign ("@").
@@ -16,11 +16,30 @@ According to the rfc 3639 ```https://datatracker.ietf.org/doc/html/rfc3696#page-
 > ...
 >
 > Without quotes, local-parts may consist of any combination of
-   alphabetic characters, digits, or any of the special characters
+>   alphabetic characters, digits, or any of the special characters
 >
 >      ! # $ % & ' * + - / = ?  ^ _ ` . { | } ~
+>
+>   period (".") may also appear, but may not be used to start or end the
+>   local part, nor may two or more consecutive periods appear.  Stated
+>   differently, any ASCII graphic (printing) character other than the
+>   at-sign ("@"), backslash, double quote, comma, or square brackets may
+>   appear without quoting.  If any of that list of excluded characters
+>   are to appear, they must be quoted.
+>
+> ...
+>
+> In addition to restrictions on syntax, there is a length limit on
+>   email addresses.  That limit is a maximum of 64 characters (octets)
+>   in the "local part" (before the "@") and a maximum of 255 characters
+>   (octets) in the domain part (after the "@") for a total length of 320
+>   characters.  Systems that handle email should be prepared to process
+>   addresses which are that long, even though they are rarely
+>   encountered.
+
 
 Despite rfc, each email provider have its own restrictions while creating a new email username (local part).
+By this, the validation will be divided between rcf (3696) and modern (mail providers).
 
 After testing email creation on different providers like google, microsoft, proton, terra, bol and checking its documentation, 
 the most common criteria found was:
@@ -33,15 +52,17 @@ letters or numbers, then followed by @ char and a domain (or domain + subdomain)
 - Emais can only have one @ char.
 
 
-### Abstraction for validation:
+## Abstraction for script validation:
 
 There will be always a tradeoff to be considered since a good portion of invalid emails are caused by misspelled punctuation. Which, depending on the precision level, could be fixed instead of purged if better analyzed.
+Another consideration is the ratio of valid/invalid emails depending on each email provider.
+Since each provider have its own policies and the validation here are based on the least restrictive police tested,
+some emails categorized as valid could not work for some providers.
+Also, not all providers were included on the tests.
 
-Queries using regex to find:
+Bellow, the queries used to find invalid emails on database:
 
-**occurrencies that not start with letters or numbers:**
-
-```select email FROM emails WHERE email NOT REGEXP '^[a-z-0-9]';```
+### General validation:
 
 **occurrencies without any @:**
 
@@ -51,51 +72,54 @@ Queries using regex to find:
 
 ```select email FROM emails WHERE email REGEXP '@.+@';```
 
-**occurrencies with two dots in sequence:**
+### RFC 3696:
 
-```select email FROM emails WHERE email REGEXP '\\.\\.';```
+**occurrencies with wrong punctuation sequence:**
 
-**punctuation before \@ char:**
+```select email FROM emails WHERE email REGEXP '((^\.)|(\.\.)|(\.@)|(@[[:punct:]]))';```
 
-```select email FROM emails WHERE email REGEXP '[[:punct:]]@';```
+**general validation:**
 
-**invalid characters:**
+```select email FROM emails WHERE email NOT REGEXP ''^[a-z0-9!#$%&\*+-/=?^_\`.{|}~]+@[a-z0-9!#$%&\*+-/=?^_\`.{|}~]+$';```
 
-```select email FROM emails WHERE email NOT REGEXP '[a-z0-9\.-\_@]+';```
+### Modern providers:
+
+**occurrencies that not start with letters or numbers:**
+
+```select email FROM emails WHERE email NOT REGEXP '^[a-z-0-9]';```
+
+**occurrencies with double punct befor @ char:**
+
+```select email FROM emails WHERE email REGEXP '^.*[[:punct:]]{2,}.*@.*$';```
 
 **at domain, optional subdomain and TLD:**
 
-```select email FROM emails WHERE email NOT REGEXP '@[a-z0-9-]+((\.[a-z0-9-]+)+)?\.[a-z]+$';```
+```select email FROM emails WHERE email NOT REGEXP '@[a-z0-9-]+((\.[a-z0-9-]+)+)?\.[a-z0-9-]+$';```
 
-**Regex for general validation:**
+**Complete regex for modern validation:**
 
-``` ^[a-z0-9]+((([\.\_\-]+)?[a-z0-9]+)+)?@[a-z0-9-]+((\.[a-z0-9-]+)+)?\.[a-z]+$ ```
+``` ^[a-z0-9]+((([\.\_\-]+)?[a-z0-9]+)+)?@[a-z0-9-]+((\.[a-z0-9-]+)+)?\.[a-z0-9-]+$ ```
 
 ## Usage:
 
-``` smdc-mysql --action dbparams ```
+``` smdc-mysql --type parameter criteria ```
 
-Arguments:
+type:
+    --list       \t analyse emails in list and log results.
+    --database   \t query emails in database and log results.
 
-    --select     \t SELECT emails and log results.
-    --delete     \t DELETE emails and log results.
-    --help       \t Always useful.
+Parameteres:
+    filepath     \t path of the email list.
+    action       \t Select or delete action to query database.
 
-    duplicates \t Select or delete duplicated emails and log results.
-    invalid    \t Select or delete invalid emails and log results.
-
-    db user
-    db password.
-    db address.
-    mail database name.
-    mail table name.
-    mail field name
+criteria:
+    rfc          \t filter and log invalid/valid emails according to rfc 3639.
+    modern       \t filter and log invalid/valid emails according to modern email providers.
 
 Examples:
 
-    smdc-mysql --select duplicates john password 192.168.0.1 maildb mails email\n
-    smdc-mysql --delete invalid john password 192.168.0.1 maildb mails email\n"
-
+    smdc-mysql --list /var/emailist rfc\n
+    smdc-mysql --database select modern \n"
 
 ## Caveats
 

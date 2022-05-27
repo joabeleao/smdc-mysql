@@ -64,39 +64,39 @@ Bellow, the queries used to find invalid emails on database:
 
 ### General validation:
 
-**occurrencies without any @:**
+occurrencies without any @:
 
 ```select email FROM emails WHERE email NOT REGEXP '@';"```
 
-**occurrencies with double @:**
+occurrencies with double @:
 
 ```select email FROM emails WHERE email REGEXP '@.+@';```
 
 ### RFC 3696:
 
-**occurrencies with wrong punctuation sequence:**
+occurrencies with wrong punctuation sequence:
 
 ```select email FROM emails WHERE email REGEXP '((^\.)|(\.\.)|(\.@)|(@[[:punct:]]))';```
 
-**general validation:**
+general validation:
 
 ```select email FROM emails WHERE email NOT REGEXP ''^[a-z0-9!#$%&\*+-/=?^_\`.{|}~]+@[a-z0-9!#$%&\*+-/=?^_\`.{|}~]+$';```
 
 ### Modern providers:
 
-**occurrencies that not start with letters or numbers:**
+occurrencies that not start with letters or numbers:
 
 ```select email FROM emails WHERE email NOT REGEXP '^[a-z-0-9]';```
 
-**occurrencies with double punct befor @ char:**
+occurrencies with double punct befor @ char:
 
 ```select email FROM emails WHERE email REGEXP '^.*[[:punct:]]{2,}.*@.*$';```
 
-**at domain, optional subdomain and TLD:**
+at domain, optional subdomain and TLD:
 
 ```select email FROM emails WHERE email NOT REGEXP '@[a-z0-9-]+((\.[a-z0-9-]+)+)?\.[a-z0-9-]+$';```
 
-**Complete regex for modern validation:**
+Complete regex for modern validation:
 
 ``` ^[a-z0-9]+((([\.\_\-]+)?[a-z0-9]+)+)?@[a-z0-9-]+((\.[a-z0-9-]+)+)?\.[a-z0-9-]+$ ```
 

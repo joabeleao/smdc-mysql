@@ -29,7 +29,7 @@ MYSQL_FIELD=''
 function _help() {
 
   echo -e "
-Usage: $0 --type -parameter -criteria
+Usage: $0 --type parameter criteria
 
 type:
     --list       \t analyse emails in list and log results.

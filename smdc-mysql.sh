@@ -14,120 +14,132 @@ MYSQL="$(${WHICH} mysql)"
 
 # script args
 ARGUMENTS=("$@")
+# list of valid top level domain by iana.org
+VALIDTLD=("$(curl -s https://data.iana.org/TLD/tlds-alpha-by-domain.txt)")
+
+# connection settings
+MYSQL_USER=''
+MYSQL_PASS=''
+MYSQL_HOST=''
+MYSQL_DB=''
+MYSQL_PORT=''
+MYSQL_TABLE=''
+MYSQL_FIELD=''
 
 function _help() {
 
   echo -e "
-Usage: $0 --action dbparams
+Usage: $0 --type -parameter -criteria
 
-Arguments:
-  --select     \t SELECT emails and log results.
-  --delete     \t DELETE emails and log results.
-  --help       \t Always useful.
+type:
+    --list       \t analyse emails in list and log results.
+    --database   \t query emails in database and log results.
 
-    duplicates \t Select or delete duplicated emails and log results.
-    invalid    \t Select or delete invalid emails and log results.
+Parameteres:
+    filepath     \t path of the email list.
+    action       \t Select or delete action to query database.
 
-    db user
-    db password.
-    db address.
-    mail database name.
-    mail table name.
-    mail field name
+criteria:
+    rfc          \t filter and log invalid/valid emails according to rfc 3639.
+    modern       \t filter and log invalid/valid emails according to modern email providers.
 
 Examples:
 
-    $0 --select duplicates john password 192.168.0.1 maildb mails mail\n
-    $0 --delete invalid john password 192.168.0.1 maildb mails mail\n"
+    $0 --list /var/emailist rfc\n
+    $0 --database select modern \n"
 
 }
 
-function _clean_duplicate() {
-    # Execute queries to clean duplicated emails based on the unique value of email and document id.
+function _test_list() {
+    #
+    # Find invalid and valid emails according to selected criteria.
     # Arguments:
-    #     Mysql connection variables.
+    #    $1: path to emails list.
+    #    $2: criteria
 
     # locals
-    local action="${1}"
-    local mysql_user="${2}"
-    local mysql_pass="${3}"
-    local mysql_host="${4}"
-    local mysql_db="${5}"
-    local mysql_table="${6}"
-    local mysql_field="${7}"
+    local list="${1}"
+    local criteria="${2}"
 
     # queries
-    DQUERY[0]="${action} c1 FROM ${mysql_table} c1
-INNER JOIN ${mysql_table} c2
-WHERE
-c1.id > c2.id AND
-c1.${mysql_field} = c2.${mysql_field} AND
-c1.doc = c2.doc;"
+    for line in $(cat "${list}"); do # the while command was not elegible due to work different with continue comand
+        # missing @ character. - any provider
+        # double @ character. - any provider
+        # invalid top level domain according to iana's tld official list. - any provider
+        echo "${line}" | grep -Eiv '.*@.*' >> /var/log/smdc-mysql_invalid && continue
+        echo "${line}" | grep -Ei '.*@.*@.' >> /var/log/smdc-mysql_invalid && continue
+        [[ "${VALIDTLD[@]}" =~ "$(echo $line | grep -Eio "\.[^\.]*$" | grep -Eio "[^\.]*" | tr "a-z" "A-Z")" ]] && echo "${line}" >> /var/log/smdc-mysql_invalid && continue
 
-    i=0
-    # iterate, execute and log.
-    for query in "${DQUERY[@]}"; do
-    	"${MYSQL}" -u"${mysql_user}" -p"${mysql_pass}" -h"${mysql_host}" -D"${mysql_db}" -e "${query}" >> /var/log/smdc_duplicate${i}.log
-    	((i++))
+        if [ "${criteria}" == 'rfc' ]; then
+            # not a valid ( ! # $ % & ' * + - / = ?  ^ _ ` . { | } ~ ) characters. - rfc 3639
+            # period at beginning; double period; before or after @ character. - rfc 3639
+            echo "${line}" | grep -Eiv '^[a-z0-9!#$%&\*+-/=?^_`.{|}~]+@[a-z0-9!#$%&\*+-/=?^_`.{|}~]+$' >> /var/log/smdc-mysql_invalid-rfc3639 && continue
+            echo "${line}" | grep -E '((^\.)|(\.\.)|(\.@)|(@[[:punct:]]))' >> /var/log/smdc-mysql_invalid-rfc3639 && continue
+            echo "${line}" >> /var/log/smdc-mysql_valid-rfc3639
+        elif [ "${criteria}" == 'modern' ]; then
+            # double punct before @ char (not necessary after due to following regex) - modern providers
+            # general validation:
+            #   followed by @ and domains
+            #   starting with alfanum chars divided or not by . - _ chars
+            #   no punctuation before or after @ character.
+            #   optional subdomain followed by domain and top level domain
+            echo "${line}" | grep -Ei "^.*[[:punct:]]{2,}.*@.*$" >> /var/log/smdc-mysql_invalid-modern && continue 
+            echo "${line}" | grep -Eiv "^[a-z0-9]+((([\.\_\-]+)?[a-z0-9]+)+)?@[a-z0-9-]+((\.[a-z0-9-]+)+)?\.[a-z0-9-]+$" >> /var/log/smdc-mysql_invalid-modern && continue
+            echo "${line}" >> /var/log/smdc-mysql_valid-modern
+        else
+            _help
+        fi
+
     done
 
 }
 
-function _clean_invalid() {
-    
-    # Execute queries to clean invalid emails.
+function _test_database() {
+    #
+    # Execute queries to query invalid emails according to selected criteria.
     # Arguments:
-    #     Mysql connection variables.
+    #     $1: select or delete.
+    #     $2: criteria
 
     # locals
     local action="${1}"
-    local mysql_user="${2}"
-    local mysql_pass="${3}"
-    local mysql_host="${4}"
-    local mysql_db="${5}"
-    local mysql_table="${6}"
-    local mysql_field="${7}"
-    
-    # set * char for deletion
+    local criteria="${2}"
 
     # queries
-    QUERY[0]="${action} FROM ${mysql_table} WHERE ${mysql_field} NOT REGEXP '@';" # occurrencies without @ char;
-    QUERY[1]="${action} FROM ${mysql_table} WHERE ${mysql_field} REGEXP '@.+@';" # occurrencies containing two @ char;
-    QUERY[3]="${action} FROM ${mysql_table} WHERE ${mysql_field} REGEXP '\\.\\.';" # occurrencies containing two punctuation chars at sequence;
-    QUERY[4]="${action} FROM ${mysql_table} WHERE ${mysql_field} NOT REGEXP '^[a-z0-9]+((([\.\_\-]+)?[a-z0-9]+)+)?@[a-z0-9-]+((\.[a-z0-9-]+)+)?\.[a-z]+$'" # general validation;
-    
-    i=0
+    QUERY[0]="${action} FROM ${MYSQL_TABLE} WHERE ${MYSQL_FIELD} NOT REGEXP '@';" # occurrencies without @ char;
+    QUERY[1]="${action} FROM ${MYSQL_TABLE} WHERE ${MYSQL_FIELD} REGEXP '@.+@';" # occurrencies containing two @ char;
+
+    if [ "${criteria}" == 'rfc' ]; then
+        QUERY[2]="${action} FROM ${MYSQL_TABLE} WHERE ${MYSQL_FIELD} REGEXP '((^\.)|(\.\.)|(\.@)|(@[[:punct:]]))';" # occurrencies containing wrong punctuation sequence;
+        QUERY[3]="${action} FROM ${MYSQL_TABLE} WHERE ${MYSQL_FIELD} NOT REGEXP '^[a-z0-9!#$%&\*+-/=?^_\`.{|}~]+@[a-z0-9!#$%&\*+-/=?^_\`.{|}~]+$';" # general validation;
+    elif [ "${criteria}" == 'modern' ]; then
+        QUERY[2]="${action} FROM ${MYSQL_TABLE} WHERE ${MYSQL_FIELD} REGEXP '^.*[[:punct:]]{2,}.*@.*$';" # double punct before @ char (not necessary after due to regex bellow);
+        QUERY[3]="${action} FROM ${MYSQL_TABLE} WHERE ${MYSQL_FIELD} NOT REGEXP '^[a-z0-9]+((([\.\_\-]+)?[a-z0-9]+)+)?@[a-z0-9-]+((\.[a-z0-9-]+)+)?\.[a-z0-9-]+$';" # general validation;
+    else
+        _help
+    fi
+
     # iterate, execute and log
     for query in "${QUERY[@]}"; do
-    	"${MYSQL}" -u"${mysql_user}" -p"${mysql_pass}" -h"${mysql_host}" -D"${mysql_db}" -e "${query}" >> /var/log/smdc_invalid${i}.log
-    	((i++))
+    	"${MYSQL}" -u"${MYSQL_USER}" -p"${MYSQL_PASS}" -h"${MYSQL_HOST}" -P"${MYSQL_PORT}" -D"${MYSQL_DB}" -vv -e "${query}" >> /var/log/smdc_invalid.log
     done
 
 }
-
-[ "${#ARGUMENTS[*]}" -ne 8 ] && _help && exit
-
-# connection settings
-MYSQL_USER="${ARGUMENTS[2]}"
-MYSQL_PASS="${ARGUMENTS[3]}"
-MYSQL_HOST="${ARGUMENTS[4]}"
-MYSQL_DB="${ARGUMENTS[5]}"
-MYSQL_TABLE="${ARGUMENTS[6]}"
-MYSQL_FIELD="${ARGUMENTS[7]}"
 
 # action type
 ACTION=''
 
-case "${ARGUMENTS[0]}" in
-    "--select" ) ACTION='SELECT *' ;;
-    "--delete" ) ACTION='DELETE' ;;
-    "--help"      ) _help; exit  ;;
-    *             ) _help; exit  ;;
-esac
+# argument validation
+[ "${#ARGUMENTS[*]}" -ne 3 ] && _help && exit
+[ "${ARGUMENTS[2]}" != "rfc" ] && [ "${ARGUMENTS[2]}" != "modern" ] && _help && exit
 
-case "${ARGUMENTS[1]}" in
-  "duplicate"   ) _clean_duplicate "${ACTION}"  "${MYSQL_USER}" "${MYSQL_PASS}" "${MYSQL_HOST}" "${MYSQL_DB}" "${MYSQL_TABLE}" "${MYSQL_FIELD}";;
-  "invalid"     ) _clean_invalid "${ACTION}" "${MYSQL_USER}" "${MYSQL_PASS}" "${MYSQL_HOST}" "${MYSQL_DB}" "${MYSQL_TABLE}" "${MYSQL_FIELD}";;
-  "--help"      ) _help; exit  ;;
-  *             ) _help; exit  ;;
-esac
+# execution
+if [ "${ARGUMENTS[0]}" == "--list" ]; then
+    _test_list "${ARGUMENTS[1]}" "${ARGUMENTS[2]}"
+elif [ "${ARGUMENTS[0]}" == "--database" ] && [ "${ARGUMENTS[1]}" == "select" ]; then
+    _test_database 'SELECT *' "${ARGUMENTS[2]}"
+elif [ "${ARGUMENTS[0]}" == "--database" ] && [ "${ARGUMENTS[1]}" == "delete" ]; then
+    _test_database 'DELETE' "${ARGUMENTS[2]}"
+else
+    _help; exit;
+fi
